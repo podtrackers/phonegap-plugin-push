@@ -195,6 +195,13 @@ public class PushPlugin extends CordovaPlugin implements PushConstants {
                     callbackContext.success();
                 }
             });
+        } else if (GET_APPLICATION_ICON_BADGE_NUMBER.equals(action)) {
+            cordova.getThreadPool().execute(new Runnable() {
+                public void run() {
+                    Log.v(LOG_TAG, "getApplicationIconBadgeNumber");
+                    callbackContext.success(getApplicationIconBadgeNumber(getApplicationContext()));
+                }
+            });
         } else if (CLEAR_ALL_NOTIFICATIONS.equals(action)) {
             cordova.getThreadPool().execute(new Runnable() {
                 public void run() {
@@ -260,25 +267,41 @@ public class PushPlugin extends CordovaPlugin implements PushConstants {
 
     /*
      * Sends the pushbundle extras to the client application.
-     * If the client application isn't currently active, it is cached for later processing.
+     * If the client application isn't currently active and the no-cache flag is not set, it is cached for later processing.
      */
     public static void sendExtras(Bundle extras) {
         if (extras != null) {
+            String noCache = extras.getString(NO_CACHE);
             if (gWebView != null) {
                 sendEvent(convertBundleToJson(extras));
-            } else {
+            } else if(!"1".equals(noCache)){
                 Log.v(LOG_TAG, "sendExtras: caching extras to send at a later time.");
                 gCachedExtras.add(extras);
             }
         }
     }
 
+	/*
+     * Retrives badge count from SharedPreferences
+     */
+	public static int getApplicationIconBadgeNumber(Context context){
+        SharedPreferences settings = context.getSharedPreferences(BADGE, Context.MODE_PRIVATE);
+        return settings.getInt(BADGE, 0);
+    }
+	
+	/*
+     * Sets badge count on application icon and in SharedPreferences
+     */
     public static void setApplicationIconBadgeNumber(Context context, int badgeCount) {
         if (badgeCount > 0) {
             ShortcutBadger.applyCount(context, badgeCount);
-        } else {
+        }else{
             ShortcutBadger.removeCount(context);
         }
+		
+        SharedPreferences.Editor editor = context.getSharedPreferences(BADGE, Context.MODE_PRIVATE).edit();
+        editor.putInt(BADGE, Math.max(badgeCount, 0));
+        editor.apply();
     }
 
     @Override
@@ -420,6 +443,9 @@ public class PushPlugin extends CordovaPlugin implements PushConstants {
                 }
                 else if (key.equals(FOREGROUND)) {
                     additionalData.put(key, extras.getBoolean(FOREGROUND));
+                }
+                else if (key.equals(DISMISSED)) {
+                    additionalData.put(key, extras.getBoolean(DISMISSED));
                 }
                 else if ( value instanceof String ) {
                     String strValue = (String)value;
